@@ -36,3 +36,8 @@ app/src-tauri/nsis/assets/tesseract/
 app/src-tauri/nsis/assets/*.bmp
 app/src-tauri/nsis/assets/*.png
 assets/brand/wizard/
+
+# 打包产物与历史草稿
+自然拾光记账-便携版*
+*.zip
+
