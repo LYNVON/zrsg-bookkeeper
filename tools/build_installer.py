@@ -77,7 +77,7 @@ def main():
         produced = os.path.join(STAGE, cands[0])
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    final = os.path.join(OUT_DIR, f"自然拾光记账_{version}_x64-setup.exe")
+    final = os.path.join(OUT_DIR, f"自然拾光记账_{version}_x64-setup-branded.exe")
     shutil.copy2(produced, final)
 
     # 可选签名：配置证书环境变量后自动签名，未配置则跳过
