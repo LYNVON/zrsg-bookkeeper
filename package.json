@@ -1,0 +1,12 @@
+{
+  "name": "zrsj-bookkeeper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "自然拾光记账客户端（Tauri + SQLite）——数据层与领域逻辑先行",
+  "scripts": {
+    "test": "node --test tests/smoke.test.mjs tests/importers.test.mjs tests/migrate_backup.test.mjs",
+    "migrate": "node -e \"import('./src/db/migrate.mjs').then(async m=>{const {openDb}=m; const db=openDb(process.env.DB_PATH??'data/zrsj.db'); console.log('schema version:', m.migrate(db));})\""
+  },
+  "devDependencies": {}
+}

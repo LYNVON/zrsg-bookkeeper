@@ -1,0 +1,267 @@
+// ── 工作事项：流水记账完善版（v1.8：筛选/汇总/编辑/删除/多方向） ──
+
+const CAT_CHIPS = ['办公', '油费', '餐费', '交通', '人工费', '房租', '水电', '服务费', '其他'];
+
+export function WorkPage({ onToast, refreshKey }: { onToast: (m: string) => void; refreshKey: number }) {
+  const [sub, setSub] = useState<'events' | 'work'>('events');
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [unmatched, setUnmatched] = useState<UnmatchedEvent[]>([]);
+  const [suggestions, setSuggestions] = useState<MatchSuggestion[]>([]);
+  const [accs, setAccs] = useState<{ name: string }[]>([]);
+  const [flt, setFlt] = useState({ q: '', direction: '', account: '', from: '', to: '' });
+  const [edit, setEdit] = useState<EventRow | null>(null);
+  const [showEntry, setShowEntry] = useState(false);
+  const [f, setF] = useState({
+    direction: 'expense', amount: '', occurred_on: new Date().toISOString().slice(0, 10),
+    counterparty: '', memo: '', category: '', account_name: '公户', tax_status: '',
+  });
+
+  const reload = async () => {
+    setEvents(await api.listEvents(500));
+    setUnmatched(await api.listUnmatched());
+    setSuggestions(await api.matchSuggestions());
+    try {
+      const a = await api.listAccounts();
+      setAccs(a.map((x) => ({ name: x.name })));
+    } catch { /* ignore */ }
+  };
+  useEffect(() => { reload(); }, [refreshKey]);
+
+  const filtered = events.filter((e) => {
+    if (flt.direction && e.direction !== flt.direction) return false;
+    if (flt.account && !accs.length) return false;
+    if (flt.q) {
+      const q = flt.q.toLowerCase();
+      const hay = `${e.counterparty ?? ''} ${e.memo ?? ''} ${e.amount} ${e.category ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (flt.from && e.occurred_on < flt.from) return false;
+    if (flt.to && e.occurred_on > flt.to) return false;
+    return true;
+  });
+  const sumIn = filtered.filter((e) => e.direction === 'income').reduce((s, e) => s + Number(e.amount), 0);
+  const sumOut = filtered.filter((e) => e.direction === 'expense').reduce((s, e) => s + Number(e.amount), 0);
+
+  const submit = async () => {
+    if (!f.amount || Number(f.amount) <= 0) return onToast('金额要大于 0');
+    await api.addEvent({
+      ...f,
+      amount: Number(f.amount).toFixed(2),
+      counterparty: f.counterparty || null,
+      memo: f.memo || null,
+      category: f.category || null,
+      tax_status: f.tax_status || null,
+    });
+    onToast('已记一笔 ✓');
+    setF({ ...f, amount: '', counterparty: '', memo: '', category: '' });
+    await reload();
+  };
+
+  return (
+    <>
+      <div className="subtabs">
+        <button className={sub === 'events' ? 'on' : ''} onClick={() => setSub('events')}>流水账（{events.length}）</button>
+        <button className={sub === 'work' ? 'on' : ''} onClick={() => setSub('work')}>待处理（{unmatched.length + suggestions.length}）</button>
+        <button className="primary" style={{ marginLeft: 'auto' }} onClick={() => setShowEntry(true)}>＋ 记一笔</button>
+      </div>
+
+      {sub === 'events' && (
+        <div className="card">
+          <div className="filter-bar">
+            <input placeholder="搜对方/事由/金额/分类…" value={flt.q} onChange={(e) => setFlt({ ...flt, q: e.target.value })} style={{ width: 190 }} />
+            <select value={flt.direction} onChange={(e) => setFlt({ ...flt, direction: e.target.value })}>
+              <option value="">全部方向</option>
+              {Object.entries(DIR_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <input type="date" value={flt.from} onChange={(e) => setFlt({ ...flt, from: e.target.value })} />
+            <span className="hint">至</span>
+            <input type="date" value={flt.to} onChange={(e) => setFlt({ ...flt, to: e.target.value })} />
+            {(flt.q || flt.direction || flt.from || flt.to) && (
+              <button className="ghost" onClick={() => setFlt({ q: '', direction: '', account: '', from: '', to: '' })}>清空筛选</button>
+            )}
+            <span className="hint" style={{ marginLeft: 'auto' }}>
+              <b className="inc">收 ¥{sumIn.toFixed(2)}</b> · <b className="exp">支 ¥{sumOut.toFixed(2)}</b> · 净 ¥{(sumIn - sumOut).toFixed(2)} · {filtered.length} 笔
+            </span>
+          </div>
+
+          <table>
+            <thead>
+              <tr><th>日期</th><th>方向</th><th>金额</th><th>对方</th><th>事由</th><th>分类</th><th>税务</th><th></th></tr>
+            </thead>
+            <tbody>
+              {filtered.map((e) => (
+                <tr key={e.id} className="row-click" onClick={() => setEdit(e)}>
+                  <td>{e.occurred_on}</td>
+                  <td><span className={`tag ${e.direction === 'income' ? 'income' : e.direction === 'expense' ? 'expense' : ''}`}>{DIR_LABEL[e.direction] ?? e.direction}</span></td>
+                  <td className={e.direction === 'income' ? 'inc' : e.direction === 'expense' ? 'exp' : ''}>
+                    {e.direction === 'income' ? '+' : e.direction === 'expense' ? '-' : ''}{e.amount}
+                  </td>
+                  <td>{e.counterparty ?? '—'}</td>
+                  <td>{e.memo ?? '—'}</td>
+                  <td>{e.category ?? '—'}</td>
+                  <td>{e.tax_status ?? <em className="warn">待处理</em>}</td>
+                  <td onClick={(ev) => ev.stopPropagation()}>
+                    <button className="icon-btn" title="删除" onClick={async () => {
+                      if (!confirm('删除这笔流水？')) return;
+                      await api.deleteEvent(e.id);
+                      onToast('已删除');
+                      await reload();
+                    }}>✕</button>
+                  </td>
+                </tr>
+              ))}
+              {!filtered.length && (
+                <tr><td colSpan={8} className="hint" style={{ textAlign: 'center', padding: '40px 0' }}>
+                  {events.length ? '没有符合筛选条件的流水' : '还没有记录——点右上角「＋ 记一笔」开始'}
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {sub === 'work' && (
+        <div className="grid2">
+          <section className="card">
+            <h2>缺票处置（{unmatched.length}）</h2>
+            <ul className="tasks">
+              {unmatched.map((e) => {
+                const amt = Number(e.amount);
+                const d = e.direction === 'income'
+                  ? { status: '未开票收入', note: '收入侧：开票或按未开票收入季报' }
+                  : amt <= 500
+                    ? { status: '收据可扣', note: '≤500 零星 → 收款凭证可税前扣' }
+                    : { status: '待补票', note: '先催票；补不上标「不可扣」进汇算调增' };
+                return (
+                  <li key={e.id}>
+                    <div>
+                      <b>{e.occurred_on} · ¥{e.amount}</b>
+                      <div className="hint">{e.counterparty ?? ''} → <em>{d.note}</em></div>
+                    </div>
+                    <button className="ghost" onClick={async () => { await api.applyDisposition(e.id, d.status); onToast(`已标记「${d.status}」`); await reload(); }}>{d.status}</button>
+                  </li>
+                );
+              })}
+              {!unmatched.length && <li className="ok">干净 ✓</li>}
+            </ul>
+          </section>
+          <section className="card">
+            <h2>匹配建议（{suggestions.length}）</h2>
+            <ul className="tasks">
+              {suggestions.map((s) => (
+                <li key={s.voucher_id + s.event_id}>
+                  <div>
+                    <b>事项 ¥{s.event_amount} ← 票 {s.voucher_no ?? '(无号)'}</b>
+                    <div className="hint">{s.reason} · 置信 {s.score}</div>
+                  </div>
+                  <button className="primary" onClick={async () => { await api.confirmMatch(s.event_id, s.voucher_id); onToast('已挂靠 ✓'); await reload(); }}>挂靠</button>
+                </li>
+              ))}
+              {!suggestions.length && <li className="ok">票据与流水已对齐。</li>}
+            </ul>
+          </section>
+        </div>
+      )}
+
+      {/* 记一笔 / 编辑 弹窗 */}
+      {(showEntry || edit) && (
+        <div className="modal-mask" onClick={() => { setShowEntry(false); setEdit(null); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{edit ? '编辑流水' : '记一笔'}</h2>
+            <div className="row">
+              <label>方向</label>
+              <div className="seg" style={{ flexWrap: 'wrap' }}>
+                {Object.entries(DIR_LABEL).map(([k, v]) => (
+                  <button key={k} className={(edit ? edit.direction : f.direction) === k ? 'on' : ''}
+                    onClick={() => edit ? setEdit({ ...edit, direction: k }) : setF({ ...f, direction: k })}>{v}</button>
+                ))}
+              </div>
+            </div>
+            <div className="row"><label>金额</label>
+              <input autoFocus inputMode="decimal" value={edit ? edit.amount : f.amount}
+                onChange={(e) => edit ? setEdit({ ...edit, amount: e.target.value }) : setF({ ...f, amount: e.target.value })} />
+            </div>
+            <div className="row"><label>日期</label>
+              <input type="date" value={edit ? edit.occurred_on : f.occurred_on}
+                onChange={(e) => edit ? setEdit({ ...edit, occurred_on: e.target.value }) : setF({ ...f, occurred_on: e.target.value })} />
+            </div>
+            <div className="row"><label>对方</label>
+              <input value={edit ? edit.counterparty ?? '' : f.counterparty}
+                onChange={(e) => edit ? setEdit({ ...edit, counterparty: e.target.value }) : setF({ ...f, counterparty: e.target.value })} />
+            </div>
+            <div className="row"><label>事由</label>
+              <input value={edit ? edit.memo ?? '' : f.memo}
+                onChange={(e) => edit ? setEdit({ ...edit, memo: e.target.value }) : setF({ ...f, memo: e.target.value })} />
+            </div>
+            <div className="row">
+              <label>分类</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {CAT_CHIPS.map((c) => {
+                  const cur = edit ? edit.category : f.category;
+                  return (
+                    <button key={c} className={cur === c ? 'tag income' : 'tag'} style={{ cursor: 'pointer', border: 'none' }}
+                      onClick={() => edit ? setEdit({ ...edit, category: c }) : setF({ ...f, category: c })}>{c}</button>
+                  );
+                })}
+                <input style={{ width: 90 }} placeholder="自定义"
+                  value={edit ? (edit.category && !CAT_CHIPS.includes(edit.category) ? edit.category : '') : (CAT_CHIPS.includes(f.category) ? '' : f.category)}
+                  onChange={(e) => edit ? setEdit({ ...edit, category: e.target.value }) : setF({ ...f, category: e.target.value })} />
+              </div>
+            </div>
+            <div className="row"><label>账户</label>
+              <select value={edit ? undefined : f.account_name} onChange={(e) => setF({ ...f, account_name: e.target.value })} disabled={!!edit}>
+                {accs.length ? accs.map((a) => <option key={a.name}>{a.name}</option>) : ['公户', '微信', '支付宝', '个人卡', '现金'].map((a) => <option key={a}>{a}</option>)}
+              </select>
+              {edit && <span className="hint">（编辑时账户不可改——转账/账户语义稳定）</span>}
+            </div>
+            <div className="row"><label>税务状态</label>
+              <select value={edit ? (edit.tax_status ?? '') : f.tax_status}
+                onChange={(e) => edit ? setEdit({ ...edit, tax_status: e.target.value }) : setF({ ...f, tax_status: e.target.value })}>
+                <option value="">稍后处理</option>
+                <option value="可扣">有票可扣</option>
+                <option value="收据可扣">收据可扣（小额零星）</option>
+                <option value="待补票">待补票</option>
+                <option value="不可扣">无票不可扣</option>
+                <option value="未开票收入">未开票收入</option>
+                <option value="不涉税">不涉税（内部往来）</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              {edit ? (
+                <>
+                  <button className="ghost" style={{ color: 'var(--red)' }} onClick={async () => {
+                    if (!confirm('删除这笔流水？')) return;
+                    await api.deleteEvent(edit.id);
+                    onToast('已删除');
+                    setEdit(null);
+                    await reload();
+                  }}>删除</button>
+                  <button className="primary" onClick={async () => {
+                    await api.updateEvent(edit.id, {
+                      occurred_on: edit.occurred_on,
+                      direction: edit.direction,
+                      amount: Number(edit.amount).toFixed(2),
+                      counterparty: edit.counterparty,
+                      memo: edit.memo,
+                      category: edit.category,
+                      tax_status: edit.tax_status,
+                    });
+                    onToast('已保存 ✓');
+                    setEdit(null);
+                    await reload();
+                  }}>保存修改</button>
+                </>
+              ) : (
+                <>
+                  <button className="ghost" onClick={() => setShowEntry(false)}>取消</button>
+                  <button className="ghost" onClick={async () => { await submit(); }}>保存后再记</button>
+                  <button className="primary" onClick={async () => { await submit(); setShowEntry(false); }}>保存</button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

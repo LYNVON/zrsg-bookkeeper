@@ -1,0 +1,330 @@
+// ── 账户模块：总览 / 详情（快捷入口+设置六件套） / 转账（v1.7） ──
+
+const ACCT_TYPE: Record<string, string> = {
+  bank: '银行', wechat: '微信', alipay: '支付宝', personal_card: '个人卡', cash: '现金',
+};
+
+export function AccountPage({ onToast }: { onToast: (m: string) => void }) {
+  const [accs, setAccs] = useState<AccountRow[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [evs, setEvs] = useState<EventRow[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [modal, setModal] = useState<'' | 'add' | 'edit' | 'entry' | 'recon' | 'assets' | 'transfers' | 'del'>('');
+  const [nf, setNf] = useState({ name: '', atype: 'bank', opening_balance: '0', opening_date: new Date().toISOString().slice(0, 10), is_company: true });
+  const [tr, setTr] = useState({ from_id: '', to_id: '', amount: '', occurred_on: new Date().toISOString().slice(0, 10), memo: '' });
+  const [entry, setEntry] = useState({ direction: 'expense', amount: '', memo: '', category: '', tax_status: '' });
+  const [realBal, setRealBal] = useState('');
+  const [tlogs, setTlogs] = useState<EventRow[]>([]);
+
+  const cur = accs.find((a) => a.id === openId) ?? null;
+  const reload = async () => {
+    setAccs(await api.listAccounts());
+    if (openId) setEvs(await api.accountEvents(openId, 50));
+  };
+  useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    if (!openId) return;
+    api.accountEvents(openId, 50).then(setEvs);
+  }, [openId]);
+
+  const close = () => { setModal(''); setMenuOpen(false); };
+
+  return (
+    <>
+      <div className="toolbar">
+        <button className="primary" onClick={() => { setNf({ name: '', atype: 'bank', opening_balance: '0', opening_date: new Date().toISOString().slice(0, 10), is_company: true }); setModal('add'); }}>＋ 新增账户</button>
+        <span className="hint" style={{ marginLeft: 'auto' }}>点账户卡进入详情 · 快捷记账与账户设置</span>
+      </div>
+
+      <div className="cards-grid">
+        {accs.map((a) => (
+          <div key={a.id} className={openId === a.id ? 'inv-card on' : 'inv-card'}>
+            <div className="inv-head">
+              <b>{a.name}</b>
+              <span className={`tag ${a.is_company ? '' : 'warn'}`}>{ACCT_TYPE[a.atype] ?? a.atype} · {a.is_company ? '公司' : '个人'}</span>
+            </div>
+            <div className={a.balance < 0 ? 'inv-amount exp' : 'inv-amount'}>¥{a.balance.toFixed(2)}</div>
+            <div className="hint">期初 ¥{a.opening_balance} {a.opening_date ? `· ${a.opening_date}` : ''} · 流水 {a.event_count} 笔</div>
+            <button className="ghost" onClick={() => setOpenId(openId === a.id ? null : a.id)}>{openId === a.id ? '收起' : '进入账户'}</button>
+
+            {openId === a.id && cur && (
+              <div className="acc-detail">
+                <div className="acc-quick">
+                  <button className="primary" onClick={() => { setEntry({ direction: 'expense', amount: '', memo: '', category: '', tax_status: '' }); setModal('entry'); }}>＋ 记一笔</button>
+                  <button className="ghost" onClick={() => { setTr({ from_id: a.id, to_id: '', amount: '', occurred_on: new Date().toISOString().slice(0, 10), memo: '' }); setModal('transfer' as 'entry'); setModal(''); document.getElementById('acc-transfer')?.scrollIntoView({ behavior: 'smooth' }); }}>转账</button>
+                  <div style={{ position: 'relative', marginLeft: 'auto' }}>
+                    <button className="icon-btn" onClick={() => setMenuOpen(!menuOpen)} title="账户设置">⚙</button>
+                    {menuOpen && (
+                      <div className="orb-menu" style={{ right: 0, left: 'auto', top: 34, width: 180 }}>
+                        {[
+                          ['edit', '编辑账户'],
+                          ['export', '流水导出'],
+                          ['recon', '流水对账'],
+                          ['assets', '资产明细'],
+                          ['transfers', '转账记录'],
+                          ['del', '删除账户'],
+                        ].map(([k, label]) => (
+                          <button
+                            key={k}
+                            className="q-chip"
+                            style={{ marginBottom: 4, padding: '9px 12px', justifyContent: 'flex-start' }}
+                            onClick={() => {
+                              setMenuOpen(false);
+                              if (k === 'export') {
+                                const csv = '日期,方向,金额,对方,事由,分类\n' + evs.map((e) => `${e.occurred_on},${e.direction},${e.amount},${e.counterparty ?? ''},${e.memo ?? ''},${e.category ?? ''}`).join('\n');
+                                api.exportText(`流水-${a.name}`, csv, 'csv').then((p) => { onToast(`已导出：${p}`); openPath(p); });
+                              } else if (k === 'transfers') {
+                                api.accountTransfers(a.id).then(setTlogs);
+                                setModal('transfers');
+                              } else {
+                                setModal(k as typeof modal);
+                                if (k === 'edit') setNf({ name: a.name, atype: a.atype, opening_balance: a.opening_balance, opening_date: a.opening_date ?? '', is_company: a.is_company });
+                              }
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <ul className="tasks" style={{ marginTop: 10 }}>
+                  {evs.map((e) => (
+                    <li key={e.id}>
+                      <div>
+                        <b>{e.occurred_on} · {DIR_LABEL[e.direction] ?? e.direction}</b>
+                        <div className="hint">{e.counterparty ?? ''} {e.memo ?? ''}</div>
+                      </div>
+                      <span className={e.direction === 'income' ? 'inc' : e.direction === 'expense' ? 'exp' : ''}>
+                        {e.direction === 'income' ? '+' : e.direction === 'expense' ? '-' : ''}{e.amount}
+                      </span>
+                    </li>
+                  ))}
+                  {!evs.length && <li className="hint">该账户暂无流水</li>}
+                </ul>
+              </div>
+            )}
+          </div>
+        ))}
+        {!accs.length && <div className="empty">暂无账户</div>}
+      </div>
+
+      <div className="card" id="acc-transfer" style={{ marginTop: 16 }}>
+        <h2>账户转账</h2>
+        <p className="hint">生成配对调拨事项（不计入收支与税），余额一增一减</p>
+        <div className="row">
+          <label>转出</label>
+          <select value={tr.from_id} onChange={(e) => setTr({ ...tr, from_id: e.target.value })}>
+            <option value="">—</option>
+            {accs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <label>转入</label>
+          <select value={tr.to_id} onChange={(e) => setTr({ ...tr, to_id: e.target.value })}>
+            <option value="">—</option>
+            {accs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+        <div className="row">
+          <label>金额</label>
+          <input inputMode="decimal" value={tr.amount} onChange={(e) => setTr({ ...tr, amount: e.target.value })} />
+          <label>日期</label>
+          <input type="date" value={tr.occurred_on} onChange={(e) => setTr({ ...tr, occurred_on: e.target.value })} />
+          <label>备注</label>
+          <input value={tr.memo} onChange={(e) => setTr({ ...tr, memo: e.target.value })} />
+        </div>
+        <button className="primary" onClick={async () => {
+          if (!tr.from_id || !tr.to_id || !tr.amount) return onToast('转出/转入/金额必填');
+          try {
+            await api.transfer(tr.from_id, tr.to_id, Number(tr.amount).toFixed(2), tr.occurred_on, tr.memo || null);
+            onToast('转账已配对入账 ✓');
+            setTr({ ...tr, amount: '', memo: '' });
+            await reload();
+          } catch (e) { onToast(String(e)); }
+        }}>确认转账</button>
+      </div>
+
+      {/* ── 弹窗区 ── */}
+      {(modal === 'add' || modal === 'edit') && (
+        <div className="modal-mask" onClick={close}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{modal === 'add' ? '新增账户' : '编辑账户'}</h2>
+            <div className="row"><label>账户名</label><input value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} /></div>
+            <div className="row">
+              <label>类型</label>
+              <select value={nf.atype} onChange={(e) => setNf({ ...nf, atype: e.target.value })}>
+                {Object.entries(ACCT_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div className="row"><label>期初余额</label><input inputMode="decimal" value={nf.opening_balance} onChange={(e) => setNf({ ...nf, opening_balance: e.target.value })} /></div>
+            <div className="row"><label>期初日期</label><input type="date" value={nf.opening_date} onChange={(e) => setNf({ ...nf, opening_date: e.target.value })} /></div>
+            <div className="row">
+              <label>归属</label>
+              <select value={nf.is_company ? 'company' : 'personal'} onChange={(e) => setNf({ ...nf, is_company: e.target.value === 'company' })}>
+                <option value="company">公司账户</option>
+                <option value="personal">个人账户</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="ghost" onClick={close}>取消</button>
+              <button className="primary" onClick={async () => {
+                if (!nf.name) return onToast('账户名必填');
+                if (modal === 'add') {
+                  await api.addAccount({ ...nf, opening_date: nf.opening_date || null });
+                  onToast('账户已创建 ✓');
+                } else if (openId) {
+                  await api.updateAccount(openId, { ...nf, opening_date: nf.opening_date || null });
+                  onToast('账户已更新 ✓');
+                }
+                close();
+                await reload();
+              }}>{modal === 'add' ? '创建' : '保存'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal === 'entry' && cur && (
+        <div className="modal-mask" onClick={close}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>记一笔到「{cur.name}」</h2>
+            <div className="row">
+              <label>方向</label>
+              <div className="seg">
+                {(['income', 'expense'] as const).map((d) => (
+                  <button key={d} className={entry.direction === d ? 'on' : ''} onClick={() => setEntry({ ...entry, direction: d })}>{DIR_LABEL[d]}</button>
+                ))}
+              </div>
+            </div>
+            <div className="row"><label>金额</label><input autoFocus inputMode="decimal" value={entry.amount} onChange={(e) => setEntry({ ...entry, amount: e.target.value })} /></div>
+            <div className="row"><label>事由</label><input value={entry.memo} onChange={(e) => setEntry({ ...entry, memo: e.target.value })} /></div>
+            <div className="row"><label>分类</label><input value={entry.category} onChange={(e) => setEntry({ ...entry, category: e.target.value })} /></div>
+            <div className="row">
+              <label>税务状态</label>
+              <select value={entry.tax_status} onChange={(e) => setEntry({ ...entry, tax_status: e.target.value })}>
+                <option value="">稍后处理</option>
+                <option value="可扣">有票可扣</option>
+                <option value="收据可扣">收据可扣</option>
+                <option value="待补票">待补票</option>
+                <option value="不可扣">不可扣</option>
+                <option value="未开票收入">未开票收入</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="ghost" onClick={close}>取消</button>
+              <button className="primary" onClick={async () => {
+                if (!entry.amount) return onToast('金额必填');
+                await api.addEvent({
+                  occurred_on: new Date().toISOString().slice(0, 10),
+                  direction: entry.direction,
+                  amount: Number(entry.amount).toFixed(2),
+                  memo: entry.memo || null,
+                  category: entry.category || null,
+                  tax_status: entry.tax_status || null,
+                  account_name: cur.name,
+                });
+                onToast('已记一笔 ✓');
+                close();
+                await reload();
+              }}>保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal === 'recon' && cur && (
+        <div className="modal-mask" onClick={close}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>流水对账 · {cur.name}</h2>
+            <table>
+              <tbody>
+                <tr><td>期初余额</td><td>¥{cur.opening_balance}</td></tr>
+                <tr><td>流水轧差（收−支）</td><td>¥{(cur.balance - Number(cur.opening_balance)).toFixed(2)}</td></tr>
+                <tr><td><b>账面余额</b></td><td><b>¥{cur.balance.toFixed(2)}</b></td></tr>
+              </tbody>
+            </table>
+            <div className="row" style={{ marginTop: 12 }}>
+              <label>银行实际余额</label>
+              <input inputMode="decimal" value={realBal} onChange={(e) => setRealBal(e.target.value)} placeholder="登录网银核对后填写" />
+            </div>
+            {realBal && (
+              <p className={Math.abs(Number(realBal) - cur.balance) < 0.01 ? 'ok' : 'warn'}>
+                {Math.abs(Number(realBal) - cur.balance) < 0.01
+                  ? '✓ 对平！账面与银行一致（差 1 分也要查平的规矩达成）'
+                  : `⚠ 差异 ¥${(Number(realBal) - cur.balance).toFixed(2)} —— 请逐笔核对未达账项（手续费/利息/在途）`}
+              </p>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="primary" onClick={close}>完成</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal === 'assets' && cur && (
+        <div className="modal-mask" onClick={close}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>资产明细 · {cur.name}</h2>
+            <table>
+              <tbody>
+                <tr><td>期初资产</td><td>¥{cur.opening_balance}</td></tr>
+                <tr><td>累计收入</td><td className="inc">+¥{evs.filter((e) => e.direction === 'income').reduce((s, e) => s + Number(e.amount), 0).toFixed(2)}</td></tr>
+                <tr><td>累计支出</td><td className="exp">−¥{evs.filter((e) => e.direction === 'expense').reduce((s, e) => s + Number(e.amount), 0).toFixed(2)}</td></tr>
+                <tr><td>调拨出入</td><td>¥{evs.filter((e) => e.direction === 'transfer').reduce((s, e) => s + Number(e.amount), 0).toFixed(2)}（配对内部流转）</td></tr>
+                <tr><td><b>当前余额</b></td><td><b>¥{cur.balance.toFixed(2)}</b></td></tr>
+                <tr><td>流水笔数</td><td>{cur.event_count} 笔</td></tr>
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <button className="primary" onClick={close}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal === 'transfers' && (
+        <div className="modal-mask" onClick={close}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>转账记录</h2>
+            <ul className="tasks">
+              {tlogs.map((t) => (
+                <li key={t.id}>
+                  <div>
+                    <b>{t.occurred_on} · {t.memo}</b>
+                    <div className="hint">对手方：{t.counterparty ?? '—'}</div>
+                  </div>
+                  <span>¥{t.amount}</span>
+                </li>
+              ))}
+              {!tlogs.length && <li className="hint">暂无转账记录</li>}
+            </ul>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="primary" onClick={close}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal === 'del' && cur && (
+        <div className="modal-mask" onClick={close}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>删除账户</h2>
+            <p className="hint">确定删除「{cur.name}」？有流水的账户不允许删除（防止账务数据丢失），只能改名。</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="ghost" onClick={close}>取消</button>
+              <button className="primary" style={{ background: 'linear-gradient(135deg,#e2574c,#c2413b)' }} onClick={async () => {
+                try {
+                  await api.deleteAccount(cur.id);
+                  onToast('账户已删除 ✓');
+                  setOpenId(null);
+                  close();
+                  await reload();
+                } catch (e) { onToast(String(e)); }
+              }}>确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

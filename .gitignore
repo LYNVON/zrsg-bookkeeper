@@ -1,0 +1,38 @@
+﻿# 依赖与构建产物
+node_modules/
+dist/
+app/dist/
+app/src-tauri/target/
+app/src-tauri/gen/
+
+# 运行时数据（账套、附件、备份）
+data/
+**/data/zrsj.db*
+**/attachments/
+**/backups/
+
+# 临时与本地配置
+*.log
+*.tmp
+.env
+.env.*
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# 授权私钥与生成器产物
+tools/license-gen/license-key.txt
+tools/license-gen/target/
+
+
+# 更新签名私钥（绝不提交）
+keys/*.key
+keys/*.pem
+
+# 生成的安装素材与内置 OCR 二进制：体积大，按脚本重建/下载
+app/src-tauri/resources/tesseract/
+app/src-tauri/nsis/assets/tesseract/
+app/src-tauri/nsis/assets/*.bmp
+app/src-tauri/nsis/assets/*.png
+assets/brand/wizard/

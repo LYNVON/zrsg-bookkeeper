@@ -1,0 +1,153 @@
+function Home({
+  dash, brief, series, tasks, range, setRange, onGo,
+}: {
+  dash: Dashboard | null;
+  brief: BizBrief | null;
+  series: Awaited<ReturnType<typeof api.statsSeries>> | null;
+  tasks: TaskRow[];
+  range: 'month' | 'year';
+  setRange: (r: 'month' | 'year') => void;
+  onGo: (t: Tab) => void;
+}) {
+  const today = new Date();
+  const daysUntil = (d: string) => Math.ceil((new Date(d).getTime() - today.getTime()) / 86400000);
+  const alerts = tasks.filter((t) => t.status !== 'done').map((t) => ({ t, d: daysUntil(t.due_on) })).filter((x) => x.d <= 15);
+  const overdue = alerts.filter((x) => x.d < 0);
+  const soon = alerts.filter((x) => x.d >= 0);
+
+  // 近 12 个月完整轴（缺月补 0）
+  const chartData = (() => {
+    const now = new Date();
+    const keys: string[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    const byMonth = new Map((series?.months ?? []).map((m) => [m.month, m]));
+    return keys.map((k) => ({
+      label: k,
+      income: byMonth.get(k)?.income ?? 0,
+      expense: byMonth.get(k)?.expense ?? 0,
+    }));
+  })();
+  const [pieMode, setPieMode] = useState<'expense' | 'income'>('expense');
+  const pieData = (pieMode === 'expense'
+    ? (series?.categories ?? []).map((c) => ({ label: c.category, value: c.expense }))
+    : (series?.income_categories ?? []).map((c) => ({ label: c.category, value: c.expense }))
+  ).filter((x) => x.value > 0);
+
+  return (
+    <>
+      {overdue.length > 0 && (
+        <div className="banner overdue">⚠ 有 {overdue.length} 项申报已逾期：{overdue.map((x) => x.t.title).join('、')}——尽快处理，逾期罚款 200–2000 元/次</div>
+      )}
+      {soon.length > 0 && overdue.length === 0 && (
+        <div className="banner due">⏰ 临近申报：{soon.map((x) => `${x.t.title}（还剩 ${x.d} 天）`).join('、')}</div>
+      )}
+      {!alerts.length && <div className="banner ok">✓ 申报节奏正常，继续保持</div>}
+
+      {/* 快捷入口置顶 */}
+      <div className="card">
+        <h2>快捷入口</h2>
+        <div className="quick">
+          <button onClick={() => onGo('work')}>
+            <div className="q-title">记一笔</div>
+            <div className="q-desc">收支随手记，30 秒完成</div>
+            <span className="q-go">→</span>
+          </button>
+          <button onClick={() => onGo('vault')}>
+            <div className="q-title">票夹收票</div>
+            <div className="q-desc">邮箱自动收票 / 发票管理</div>
+            <span className="q-go">→</span>
+          </button>
+          <button onClick={() => onGo('jobs')}>
+            <div className="q-title">临时用工</div>
+            <div className="q-desc">决策树 + 收据一键出</div>
+            <span className="q-go">→</span>
+          </button>
+          <button onClick={() => onGo('tax')}>
+            <div className="q-title">申报表格</div>
+            <div className="q-desc">正规表单对照填报</div>
+            <span className="q-go">→</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 收支趋势卡：KPI 数据整合进卡片头 */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="trend-head">
+          <h2>收支趋势</h2>
+          <div className="seg">
+            <button className={range === 'month' ? 'on' : ''} onClick={() => setRange('month')}>月度</button>
+            <button className={range === 'year' ? 'on' : ''} onClick={() => setRange('year')}>年度</button>
+          </div>
+        </div>
+
+        <div className="kpi-strip">
+          <div>
+            <label>本月收入</label>
+            <b className="inc">¥{series?.month_income.toFixed(0) ?? dash?.month_income ?? '0'}</b>
+          </div>
+          <div>
+            <label>本月支出</label>
+            <b className="exp">¥{series?.month_expense.toFixed(0) ?? dash?.month_expense ?? '0'}</b>
+          </div>
+          <div>
+            <label>账面余额</label>
+            <b>¥{brief?.cash_balance.toFixed(0) ?? '0'}</b>
+          </div>
+          <div>
+            <label>90 天现金预测</label>
+            <b className={(brief?.forecast_90 ?? 0) < 0 ? 'exp' : 'inc'}>¥{brief?.forecast_90.toFixed(0) ?? '0'}</b>
+          </div>
+        </div>
+
+        <TrendChart data={chartData} />
+        <div className="chart-legend">
+          <span><i style={{ background: 'linear-gradient(90deg,#6ee7b7,#2f9e6f)' }} />收入</span>
+          <span><i style={{ background: 'linear-gradient(90deg,#f7a8a2,#d9534c)' }} />支出</span>
+        </div>
+        <div className="grid2" style={{ marginTop: 6 }}>
+          <div>
+            <p className="hint"><b>柱状对比</b></p>
+            <BarChart data={chartData} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p className="hint"><b>收支构成</b></p>
+              <div className="seg" style={{ padding: 2 }}>
+                <button style={{ padding: '3px 12px', fontSize: 11 }} className={pieMode === 'expense' ? 'on' : ''} onClick={() => setPieMode('expense')}>支出</button>
+                <button style={{ padding: '3px 12px', fontSize: 11 }} className={pieMode === 'income' ? 'on' : ''} onClick={() => setPieMode('income')}>收入</button>
+              </div>
+            </div>
+            {pieData.length
+              ? <PieChart data={pieData} title={pieMode === 'expense' ? '支出' : '收入'} variant={pieMode} />
+              : <p className="hint" style={{ padding: '30px 0' }}>暂无{pieMode === 'expense' ? '支出' : '收入'}数据</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid2 equal" style={{ marginTop: 16 }}>
+        <section className="card">
+          <h2>经营简报</h2>
+          {brief && (
+            <>
+              <div className="hint">
+                <p>💰 现金流预测（90 天）：<b className={brief.forecast_90 < 0 ? 'exp' : 'inc'}>¥{brief.forecast_90.toFixed(2)}</b>
+                  {brief.forecast_90 < 0 && <em className="warn"> 触线预警：控制支出</em>}</p>
+                <p>📊 临界点：收入 {brief.vat_progress.toFixed(0)} / 30 万，剩余额度 <b>{brief.vat_left.toFixed(0)}</b> 元（只展示事实）</p>
+                <p>⏰ {brief.overdue_hint}　｜　Top 支出：{brief.top_expense}</p>
+              </div>
+              <button className="ghost" onClick={() => onGo('tax')}>去税务申报</button>
+            </>
+          )}
+        </section>
+        <section className="card">
+          <h2>往来对账（钱到没）</h2>
+          <ArList />
+          <button className="ghost" onClick={() => onGo('work')}>去工作事项处理</button>
+        </section>
+      </div>
+    </>
+  );
+}

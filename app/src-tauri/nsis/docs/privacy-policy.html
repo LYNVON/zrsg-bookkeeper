@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>隐私政策 · 自然拾光记账</title>
+<style>
+  body { margin: 0; font: 15px/1.8 "PingFang SC","Microsoft YaHei",sans-serif; color:#1a2233; background:#f7f8fc; }
+  main { max-width: 760px; margin: 40px auto; padding: 0 28px 72px; }
+  h1 { font-size: 28px; letter-spacing: .04em; margin: 0 0 8px; }
+  h2 { font-size: 17px; margin: 36px 0 12px; color:#3b6df2; }
+  h3 { font-size: 15px; margin: 20px 0 8px; color:#2c3548; }
+  p, li { color:#3c4558; margin: 8px 0; }
+  ul { padding-left: 1.4em; }
+  .meta { color:#8a93a6; font-size: 13px; margin-bottom: 28px; }
+  .notice { background:#eaf0ff; border-left:3px solid #3b6df2; padding:12px 16px; border-radius:8px; color:#2c3548; margin:16px 0; }
+  .toc { background:#fff; border:1px solid #e8ecf3; border-radius:12px; padding:16px 20px; margin:20px 0 28px; }
+  .toc a { color:#3b6df2; text-decoration:none; margin-right:16px; font-size:14px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; }
+  th, td { border:1px solid #e8ecf3; padding:10px 12px; text-align:left; vertical-align:top; }
+  th { background:#f0f4fa; font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>隐私政策</h1>
+  <p class="meta">自然拾光科技（广州）有限公司 · 版本 2.0 · 生效日期：2026-02-01</p>
+
+  <div class="notice">
+    <strong>核心承诺：</strong>「自然拾光记账」采用<strong>本地优先</strong>设计。您的账套、发票、员工与薪酬等经营数据默认仅保存在本机，我们<strong>不会收集、上传或存储</strong>这些业务数据到我方服务器。
+  </div>
+
+  <div class="toc">
+    <a href="#s1">一、适用范围</a>
+    <a href="#s2">二、我们如何处理信息</a>
+    <a href="#s3">三、权限与功能对应</a>
+    <a href="#s4">四、第三方组件与SDK</a>
+    <a href="#s5">五、数据存储与安全</a>
+    <a href="#s6">六、您的权利</a>
+    <a href="#s7">七、未成年人</a>
+    <a href="#s8">八、政策更新</a>
+    <a href="#s9">九、联系我们</a>
+  </div>
+
+  <h2 id="s1">一、适用范围</h2>
+  <p>本政策适用于您安装、使用「自然拾光记账」桌面客户端过程中，我们对信息的收集、使用、存储、共享与保护。本政策不适用于通过本软件访问的第三方网站或服务。</p>
+  <p>我们遵循《中华人民共和国个人信息保护法》《中华人民共和国数据安全法》《中华人民共和国网络安全法》等法律法规，按照合法、正当、必要和诚信原则处理信息。</p>
+
+  <h2 id="s2">二、我们如何处理信息</h2>
+
+  <h3>2.1 业务数据（本地存储，不上传）</h3>
+  <p>下列数据用于完成记账与管理功能，<strong>默认仅存储在您的设备</strong>，我们不收集、不上传：</p>
+  <table>
+    <tr><th>信息类型</th><th>示例</th><th>处理方式</th></tr>
+    <tr><td>账套与流水</td><td>收支记录、分类、备注、对手方、账户余额</td><td>本地数据库存储</td></tr>
+    <tr><td>发票与票据</td><td>发票影像、OCR 识别结果、发票号码、金额</td><td>本地存储与解析</td></tr>
+    <tr><td>公司档案</td><td>名称、纳税人识别号、注册地址等开票要素</td><td>本地存储</td></tr>
+    <tr><td>用工与薪酬</td><td>员工姓名、身份证号、工资、个税预估、劳务记录</td><td>本地存储</td></tr>
+    <tr><td>银行流水</td><td>您主动导入的 CSV 等文件内容</td><td>本地解析与匹配</td></tr>
+    <tr><td>备份文件</td><td>本地备份包、AES-256 加密备份包</td><td>由您自行保管</td></tr>
+  </table>
+
+  <h3>2.2 设备与诊断信息（极少量，用于排障）</h3>
+  <p>软件运行崩溃或异常时，可能在<strong>本地</strong>生成错误日志，用于您自行排查或向我们反馈。我们<strong>不主动</strong>建立云端日志收集。若您通过邮件或在线渠道主动提交日志，仅用于问题定位，不作其他用途。</p>
+
+  <h3>2.3 更新检查（可选）</h3>
+  <p>若您使用“检查更新”，软件可能访问更新源获取版本信息。该过程仅用于比对版本号，不附带您的账套或票据内容。</p>
+
+  <h3>2.4 AI 助手（可选，需您主动开启）</h3>
+  <ul>
+    <li>默认关闭。仅在您自行配置第三方大模型 API Key 后才可使用；</li>
+    <li>为回答您的问题，可能将您<strong>主动选中或输入</strong>的文本片段发送至您配置的服务商；</li>
+    <li>我们<strong>不会</strong>在未告知的情况下批量上传账套；相关传输受您与该服务商的协议约束；</li>
+    <li>您可随时删除 API Key 并关闭该功能。</li>
+  </ul>
+
+  <h3>2.5 邮箱收票 / 云端能力（可选）</h3>
+  <p>若未来版本启用邮箱收票或云端同步，将在启用前单独说明数据范围、传输方式与保存期限，并征得您的同意。在此之前，相关能力不默认开启。</p>
+
+  <h2 id="s3">三、权限与功能对应</h2>
+  <table>
+    <tr><th>权限 / 能力</th><th>用途</th><th>是否可拒绝</th></tr>
+    <tr><td>文件读写</td><td>导入银行流水、发票图片；导出报表与备份</td><td>可拒绝，相关功能不可用</td></tr>
+    <tr><td>通知</td><td>申报截止提醒、待办事项</td><td>可在系统设置中关闭</td></tr>
+    <tr><td>网络（更新 / 可选 AI）</td><td>检查软件更新；在您配置后调用 AI 接口</td><td>可不使用更新与 AI</td></tr>
+    <tr><td>开机 / 托盘（如有）</td><td>常驻提醒申报日历</td><td>可在设置中关闭</td></tr>
+  </table>
+  <p>我们不会申请与记账无关的通讯录、位置、麦克风、摄像头等敏感权限。</p>
+
+  <h2 id="s4">四、第三方组件与 SDK</h2>
+  <ul>
+    <li><strong>Microsoft Edge WebView2：</strong>提供桌面界面渲染能力，由 Microsoft 按其隐私政策处理诊断数据（您可在 Windows 设置中调整诊断级别）；</li>
+    <li><strong>OCR / 模型服务：</strong>若使用云端识别，仅在您触发识别时传输对应票据图像；本地能力优先；</li>
+    <li><strong>大模型 API：</strong>仅在您配置并启用后，按您的指令传输文本。</li>
+  </ul>
+  <p>我们不向任何第三方出售您的个人信息。</p>
+
+  <h2 id="s5">五、数据存储与安全</h2>
+  <ul>
+    <li><strong>存储期限：</strong>业务数据保存在本地，由您决定保留时长；删除或卸载后可彻底清除；</li>
+    <li><strong>加密能力：</strong>提供 AES-256 加密备份包，口令由您保管，丢失无法恢复；</li>
+    <li><strong>安全措施：</strong>软件设计避免明文外传；本地数据库建议置于用户目录，由系统账户权限保护；</li>
+    <li><strong>跨境传输：</strong>默认不发生跨境传输。若您自行配置境外 AI 服务，属您自主行为。</li>
+  </ul>
+
+  <h2 id="s6">六、您的权利</h2>
+  <p>按照适用法律法规，您享有以下权利：</p>
+  <ul>
+    <li><strong>查阅、复制：</strong>在软件内查阅全部业务数据，导出 CSV、报表、文书；</li>
+    <li><strong>更正、补充：</strong>编辑流水、档案、员工等记录；</li>
+    <li><strong>删除：</strong>删除单笔记录、账套或卸载并清除数据目录；</li>
+    <li><strong>撤回同意：</strong>关闭 AI、通知、更新检查等可选功能；</li>
+    <li><strong>获取副本：</strong>通过备份功能导出完整账套。</li>
+  </ul>
+  <p>由于数据在您本地，上述权利大多可由您在软件内直接行使，无需向我们申请。</p>
+
+  <h2 id="s7">七、未成年人</h2>
+  <p>本软件面向具有完全民事行为能力的经营者与用户。若您为未成年人，请在监护人指导下使用。我们不会故意收集未成年人个人信息。</p>
+
+  <h2 id="s8">八、政策更新</h2>
+  <ul>
+    <li>本政策可能适时修订，并在本页标注生效日期；</li>
+    <li>涉及处理目的、信息类型、共享对象等重大变化时，将通过软件内提示等显著方式告知；</li>
+    <li>您继续使用视为接受更新后的政策。</li>
+  </ul>
+
+  <h2 id="s9">九、联系我们</h2>
+  <p>如对本隐私政策或信息处理有疑问、投诉、建议：</p>
+  <ul>
+    <li>公司名称：自然拾光科技（广州）有限公司</li>
+    <li>软件名称：自然拾光记账</li>
+    <li>联系渠道：软件内「设置 — 关于 / 帮助」或安装包内附带的联系方式</li>
+  </ul>
+  <p>我们将在收到反馈后 15 个工作日内答复。</p>
+  <p class="meta">本政策版本 2.0，自 2026 年 2 月 1 日起生效。</p>
+</main>
+</body>
+</html>
