@@ -67,6 +67,8 @@ pub struct CompanyInput {
     pub tax_city: Option<String>,
     pub bank_name: Option<String>,
     pub bank_account: Option<String>,
+    pub subject_type: Option<String>,
+    pub has_employee: Option<bool>,
 }
 
 fn with_db<T>(db: &DbState, f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Result<T, String> {
@@ -98,8 +100,15 @@ pub fn init_app(state: tauri::State<'_, DbState>) -> Result<DbStatus, String> {
     let path = crate::db::resolve_db_path();
     let conn = crate::cryptdb::open_app_db(&path)?;
     let status = read_status(&conn, &path).map_err(|e| e.to_string())?;
-    // 播种标准申报任务（已有则跳过）
-    let _ = crate::report::seed_default_tasks(&conn);
+    // 仅首次（无任何申报任务）按画像生成；日常重建在保存档案时触发
+    {
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM filing_task", [], |r| r.get(0))
+            .unwrap_or(0);
+        if n == 0 {
+            let _ = crate::report::rebuild_filing_tasks(&conn);
+        }
+    }
     let mut guard = state.inner().0.lock().map_err(|e| e.to_string())?;
     *guard = Some(conn);
     Ok(status)
@@ -286,12 +295,13 @@ pub fn save_company(state: tauri::State<'_, DbState>, input: CompanyInput) -> Re
     let now = now_iso();
     with_db(state.inner(), |c| {
         c.execute(
-            "INSERT INTO company(id,name,tax_no,legal_person,register_city,tax_city,bank_name,bank_account,taxpayer_type,filing_cycle,created_at,updated_at)
-             VALUES('main',?1,?2,?3,?4,?5,?6,?7,'small','quarter',?8,?8)
+            "INSERT INTO company(id,name,tax_no,legal_person,register_city,tax_city,bank_name,bank_account,taxpayer_type,filing_cycle,subject_type,has_employee,created_at,updated_at)
+             VALUES('main',?1,?2,?3,?4,?5,?6,?7,'small','quarter',?8,?9,?10,?10)
              ON CONFLICT(id) DO UPDATE SET name=excluded.name,tax_no=excluded.tax_no,
                legal_person=excluded.legal_person,register_city=excluded.register_city,
                tax_city=excluded.tax_city,bank_name=excluded.bank_name,
-               bank_account=excluded.bank_account,updated_at=excluded.updated_at",
+               bank_account=excluded.bank_account,subject_type=excluded.subject_type,
+               has_employee=excluded.has_employee,updated_at=excluded.updated_at",
             rusqlite::params![
                 input.name,
                 input.tax_no,
@@ -300,9 +310,14 @@ pub fn save_company(state: tauri::State<'_, DbState>, input: CompanyInput) -> Re
                 input.tax_city,
                 input.bank_name,
                 input.bank_account,
+                input.subject_type,
+                input.has_employee.map(|b| if b { 1i64 } else { 0i64 }),
                 now
             ],
         )?;
+        // 档案变化 → 重新按画像生成申报日历
+        let n = crate::report::rebuild_filing_tasks(c)?;
+        crate::audit::log_change(c, "company", "main", "update", &format!("更新档案，重建申报任务 {n} 条"));
         Ok(())
     })
 }
@@ -311,9 +326,10 @@ pub fn save_company(state: tauri::State<'_, DbState>, input: CompanyInput) -> Re
 pub fn get_company(state: tauri::State<'_, DbState>) -> Result<Option<CompanyInput>, String> {
     with_db(state.inner(), |c| {
         match c.query_row(
-            "SELECT name,tax_no,legal_person,register_city,tax_city,bank_name,bank_account FROM company LIMIT 1",
+            "SELECT name,tax_no,legal_person,register_city,tax_city,bank_name,bank_account,subject_type,has_employee FROM company LIMIT 1",
             [],
             |r| {
+                let has: Option<i64> = r.get(8)?;
                 Ok(CompanyInput {
                     name: r.get(0)?,
                     tax_no: r.get(1)?,
@@ -322,6 +338,8 @@ pub fn get_company(state: tauri::State<'_, DbState>) -> Result<Option<CompanyInp
                     tax_city: r.get(4)?,
                     bank_name: r.get(5)?,
                     bank_account: r.get(6)?,
+                    subject_type: r.get(7)?,
+                    has_employee: has.map(|v| v != 0),
                 })
             },
         ) {
@@ -1367,7 +1385,7 @@ pub fn stats_series(state: tauri::State<'_, DbState>) -> Result<crate::report::S
 
 #[tauri::command]
 pub fn seed_default_tasks(state: tauri::State<'_, DbState>) -> Result<u64, String> {
-    with_db(state.inner(), |c| crate::report::seed_default_tasks(c))
+    with_db(state.inner(), |c| crate::report::rebuild_filing_tasks(c))
 }
 
 #[tauri::command]

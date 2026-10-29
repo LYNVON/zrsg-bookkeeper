@@ -111,6 +111,11 @@ const MIGRATIONS: &[(i64, &str)] = &[
            uid TEXT PRIMARY KEY, folder TEXT, seen_at TEXT
          );",
     ),
+    (
+        4,
+        "ALTER TABLE company ADD COLUMN subject_type TEXT;
+         ALTER TABLE company ADD COLUMN has_employee INTEGER;",
+    ),
 ];
 
 /// 供加密打开路径复用：跑基线 DDL + 版本迁移

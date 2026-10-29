@@ -1117,7 +1117,24 @@ export function SettingsPage({ onToast }: { onToast: (m: string) => void }) {
         {([['name', '公司名称'], ['tax_no', '税号'], ['legal_person', '法定代表人'], ['register_city', '注册城市'], ['tax_city', '税务城市'], ['bank_name', '开户行'], ['bank_account', '银行账号']] as const).map(([k, label]) => (
           <div className="row" key={k}><label>{label}</label><input value={(c[k] as string) ?? ''} onChange={(e) => setC({ ...c, [k]: e.target.value })} /></div>
         ))}
-        <button className="primary" onClick={async () => { await api.saveCompany(c); onToast('公司档案已保存 ✓'); }}>保存档案</button>
+        <div className="row">
+          <label>主体类型</label>
+          <select value={c.subject_type ?? 'sole'} onChange={(e) => setC({ ...c, subject_type: e.target.value })}>
+            <option value="sole">个体工商户</option>
+            <option value="individual">个人独资 / 合伙</option>
+            <option value="llc">有限责任公司</option>
+          </select>
+        </div>
+        <div className="row">
+          <label>是否有雇员</label>
+          <input type="checkbox" checked={!!c.has_employee} onChange={(e) => setC({ ...c, has_employee: e.target.checked })} />
+          <span className="hint">影响个税扣缴申报提醒</span>
+        </div>
+        <button className="primary" onClick={async () => {
+          await api.saveCompany(c);
+          onToast('公司档案已保存，申报日历已按画像重建 ✓');
+        }}>保存档案</button>
+        <p className="hint">注册城市与税务城市可不同；保存后会重新生成「该报的」申报提醒。</p>
       </section>
       <section className="card">
         <h2>数据与备份</h2>

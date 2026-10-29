@@ -74,6 +74,7 @@ export default function App() {
   const [coForm, setCoForm] = useState({
     name: '', tax_no: '', legal_person: '', register_city: '广州',
     tax_city: '广州', bank_name: '', bank_account: '',
+    subject_type: 'sole', has_employee: false,
   });
   const [coSaving, setCoSaving] = useState(false);
   const [coSeedTasks, setCoSeedTasks] = useState(true);
@@ -101,6 +102,8 @@ export default function App() {
           tax_city: c.tax_city ?? '',
           bank_name: c.bank_name ?? '',
           bank_account: c.bank_account ?? '',
+          subject_type: c.subject_type ?? 'sole',
+          has_employee: !!c.has_employee,
         });
       } else {
         setNeedCompany(true);
@@ -287,6 +290,20 @@ export default function App() {
               <label>税务城市</label>
               <input value={coForm.tax_city} onChange={(e) => setCoForm({ ...coForm, tax_city: e.target.value })} />
             </div>
+            <p className="hint" style={{ margin: '0 0 12px' }}>注册城市与税务城市可以不同（跨区经营/迁址属地管理），按实际填即可。</p>
+            <div className="row">
+              <label>主体类型</label>
+              <select value={coForm.subject_type} onChange={(e) => setCoForm({ ...coForm, subject_type: e.target.value })}>
+                <option value="sole">个体工商户</option>
+                <option value="individual">个人独资 / 合伙</option>
+                <option value="llc">有限责任公司</option>
+              </select>
+            </div>
+            <div className="row">
+              <label>是否有雇员</label>
+              <input type="checkbox" checked={coForm.has_employee} onChange={(e) => setCoForm({ ...coForm, has_employee: e.target.checked })} />
+              <span className="hint">有雇员需每月做个人所得税扣缴申报</span>
+            </div>
             <div className="row">
               <label>开户行</label>
               <input value={coForm.bank_name} onChange={(e) => setCoForm({ ...coForm, bank_name: e.target.value })} />
@@ -298,7 +315,7 @@ export default function App() {
             <div className="row" style={{ marginTop: 10 }}>
               <label>申报任务</label>
               <input type="checkbox" checked={coSeedTasks} onChange={(e) => setCoSeedTasks(e.target.checked)} />
-              <span className="hint">按小规模/季度生成常用申报日历（可随时增删）</span>
+              <span className="hint">按你填的主体/税种/周期生成「该报的」申报日历（可随时增删）</span>
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 14 }}>
               <button className="ghost" onClick={() => setNeedCompany(false)}>稍后再填</button>

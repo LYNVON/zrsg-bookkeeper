@@ -96,38 +96,169 @@ pub fn stats_series(conn: &Connection) -> rusqlite::Result<StatsSeries> {
     })
 }
 
-/// 标准申报任务种子：季报/年报/汇算（按当前年生成），已有任务则跳过
-pub fn seed_default_tasks(conn: &Connection) -> rusqlite::Result<u64> {
-    let n: i64 = conn.query_row("SELECT COUNT(*) FROM filing_task", [], |r| r.get(0))?;
-    if n > 0 {
-        return Ok(0);
+/// 申报义务调研：按主体类型 / 纳税人类型 / 申报周期 / 是否有雇员，
+/// 只生成该公司真正需要报的事项；并在到期日前 30 天到后 420 天窗口内展示。
+pub fn rebuild_filing_tasks(conn: &Connection) -> rusqlite::Result<u64> {
+    let (subject, taxpayer, cycle, has_emp): (Option<String>, String, String, Option<i64>) = conn
+        .query_row(
+            "SELECT subject_type, taxpayer_type, filing_cycle, has_employee FROM company LIMIT 1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .unwrap_or((None, "small".into(), "quarter".into(), None));
+
+    // 日期工具：以 1970-01-01 为原点换算
+    let days_now: i64 = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+        / 86400;
+    let today = civil_from_days(days_now);
+    let (ty, tm, td) = today;
+
+    // 删除旧的标准化任务，按新画像重建
+    conn.execute("DELETE FROM filing_task WHERE id LIKE 'std-%'", [])?;
+
+    let llc = subject.as_deref().unwrap_or("sole") == "llc";
+    let monthly_vat = taxpayer == "general" || cycle == "month";
+    let general = taxpayer == "general";
+
+    // 收集候选 (due_on, title, channel)
+    let mut items: Vec<(String, String, String)> = Vec::new();
+
+    // 增值税（及附加）
+    if monthly_vat {
+        for y in (ty - 1)..=(ty + 1) {
+            for m in 1..=12 {
+                items.push((
+                    format!("{y:04}-{m:02}-15"),
+                    "增值税/附加申报（上月）".into(),
+                    "电子税务局".into(),
+                ));
+            }
+        }
+    } else {
+        // 季报：1/4/7/10 月 15 日
+        for y in (ty - 1)..=(ty + 1) {
+            for (mm, name) in [(1, "Q4（上年）"), (4, "Q1"), (7, "Q2"), (10, "Q3")] {
+                items.push((
+                    format!("{y:04}-{mm:02}-15"),
+                    format!("增值税/附加季报 {name}"),
+                    "电子税务局".into(),
+                ));
+            }
+        }
     }
-    let year: i64 = {
-        let t = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let days = (t / 86400) as i64;
-        1970 + days / 365 // 粗略年份，仅用于默认任务命名
-    };
+
+    if llc {
+        // 企业所得税：季度预缴 + 年度汇算
+        if !monthly_vat {
+            for y in (ty - 1)..=(ty + 1) {
+                for (mm, name) in [(1, "Q4（上年）"), (4, "Q1"), (7, "Q2"), (10, "Q3")] {
+                    items.push((
+                        format!("{y:04}-{mm:02}-15"),
+                        format!("企业所得税预缴 {name}"),
+                        "电子税务局".into(),
+                    ));
+                }
+            }
+        }
+        for y in (ty - 1)..=(ty + 1) {
+            items.push((
+                format!("{y:04}-05-31"),
+                "企业所得税汇算清缴".into(),
+                "电子税务局".into(),
+            ));
+        }
+    } else {
+        // 个体工商户 / 个人独资：经营所得个税
+        for y in (ty - 1)..=(ty + 1) {
+            for (mm, name) in [(1, "Q4（上年）"), (4, "Q1"), (7, "Q2"), (10, "Q3")] {
+                items.push((
+                    format!("{y:04}-{mm:02}-15"),
+                    format!("经营所得个税预缴 {name}"),
+                    "电子税务局".into(),
+                ));
+            }
+            items.push((
+                format!("{y:04}-03-31"),
+                "经营所得个税汇算（上年度）".into(),
+                "电子税务局".into(),
+            ));
+        }
+    }
+
+    // 工商年报（个体户与企业都需）
+    for y in (ty - 1)..=(ty + 1) {
+        items.push((
+            format!("{y:04}-06-30"),
+            "工商年报截止".into(),
+            "国家企业信用信息公示系统（按注册城市入口）".into(),
+        ));
+    }
+
+    // 有雇员：每月个税扣缴
+    if has_emp.unwrap_or(0) != 0 {
+        for y in (ty - 1)..=(ty + 1) {
+            for m in 1..=12 {
+                items.push((
+                    format!("{y:04}-{m:02}-15"),
+                    "个人所得税扣缴申报（上月）".into(),
+                    "自然人电子税务局（扣缴端）".into(),
+                ));
+            }
+        }
+    }
+
+    // 只落到期日前 30 天 ~ 后 420 天窗口内的（避免一堆远期/陈旧提醒）
+    let min_d = days_now - 30;
+    let max_d = days_now + 420;
     let mut count = 0u64;
-    let items: Vec<(String, String, String)> = vec![
-        (format!("{year}-01-15"), "Q4 增值税/企税季报（上年）".into(), "电子税务局·综合关联式申报".into()),
-        (format!("{year}-04-15"), "Q1 增值税/企税季报".into(), "电子税务局·综合关联式申报".into()),
-        (format!("{year}-04-30"), "工商年报开始（截止 6/30）".into(), "国家企业信用信息公示系统（按注册城市入口）".into()),
-        (format!("{year}-05-31"), "企业所得税汇算清缴".into(), "电子税务局".into()),
-        (format!("{year}-06-30"), "工商年报截止".into(), "国家企业信用信息公示系统（按注册城市入口）".into()),
-        (format!("{year}-07-15"), "Q2 增值税/企税季报".into(), "电子税务局·综合关联式申报".into()),
-        (format!("{year}-10-15"), "Q3 增值税/企税季报".into(), "电子税务局·综合关联式申报".into()),
-    ];
     for (i, (due, title, channel)) in items.iter().enumerate() {
+        let Some(d) = days_from_yyyy_mm_dd(due) else { continue };
+        if d < min_d || d > max_d {
+            continue;
+        }
         conn.execute(
-            "INSERT INTO filing_task(id,title,due_on,status,channel) VALUES(?1,?2,?3,'pending',?4)",
-            rusqlite::params![format!("std-{year}-{i}"), title, due, channel],
+            "INSERT OR IGNORE INTO filing_task(id,title,due_on,status,channel) VALUES(?1,?2,?3,'pending',?4)",
+            rusqlite::params![format!("std-{}-{i}", due), title, due, channel],
         )?;
         count += 1;
     }
+    let _ = (ty, tm, td);
     Ok(count)
+}
+
+fn civil_from_days(z: i64) -> (i64, i64, i64) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y, m, d)
+}
+
+fn days_from_yyyy_mm_dd(s: &str) -> Option<i64> {
+    let p: Vec<i64> = s.split('-').filter_map(|x| x.parse().ok()).collect();
+    if p.len() != 3 {
+        return None;
+    }
+    Some(days_from_civil(p[0], p[1], p[2]))
+}
+
+/// 与 civil_from_days 互逆（1970-01-01 = 0），保证窗口过滤同一标尺
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
 }
 
 /// 正规申报表格（小规模·简化对照表）：打印后对照填报或下载留存
@@ -210,4 +341,81 @@ th{{background:#f2f2f2}}
 <p style="font-size:11px;color:#666">自然拾光记账生成 · 数据来自本地账目 · 以电子税务局实际申报表口径为准，如字段与实际表单不一致请按税局表单填报</p>
 </body></html>"#
     ))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ctx() -> (std::path::PathBuf, Connection) {
+        let uniq = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("zrsj-filing-{}-{uniq}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let conn = crate::db::open_and_migrate(&dir.join("f.db")).expect("open");
+        (dir, conn)
+    }
+
+    fn set_company(conn: &Connection, subject: &str, taxpayer: &str, cycle: &str, has_emp: i64) {
+        conn.execute(
+            "INSERT INTO company(id,name,tax_no,taxpayer_type,filing_cycle,subject_type,has_employee,created_at,updated_at)
+             VALUES('main','甲','T1',?1,?2,?3,?4,'0','0')
+             ON CONFLICT(id) DO UPDATE SET taxpayer_type=excluded.taxpayer_type,filing_cycle=excluded.filing_cycle,
+               subject_type=excluded.subject_type,has_employee=excluded.has_employee",
+            rusqlite::params![taxpayer, cycle, subject, has_emp],
+        )
+        .unwrap();
+    }
+
+    fn titles(conn: &Connection) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT title FROM filing_task WHERE id LIKE 'std-%' ORDER BY due_on")
+            .unwrap();
+        stmt.query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn sole_trader_gets_business_income_not_cit() {
+        let (dir, conn) = ctx();
+        set_company(&conn, "sole", "small", "quarter", 0);
+        let n = rebuild_filing_tasks(&conn).expect("rebuild");
+        assert!(n > 0);
+        let ts = titles(&conn);
+        assert!(ts.iter().any(|t| t.contains("经营所得个税汇算")), "{ts:?}");
+        assert!(!ts.iter().any(|t| t.contains("企业所得税汇算清缴")), "{ts:?}");
+        assert!(ts.iter().any(|t| t.contains("工商年报")), "{ts:?}");
+        assert!(!ts.iter().any(|t| t.contains("扣缴申报")), "无雇员不应有个税扣缴");
+        // 不应有超过 30 天的陈旧提醒
+        let mut stmt = conn
+            .prepare("SELECT due_on FROM filing_task WHERE id LIKE 'std-%'")
+            .unwrap();
+        for due in stmt.query_map([], |r| r.get::<_, String>(0)).unwrap().flatten() {
+            let p: Vec<i64> = due.split('-').filter_map(|x| x.parse().ok()).collect();
+            let days = p[0] * 365 + p[1] * 30 + p[2];
+            let now_days = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0)
+                / 86400;
+            assert!(days >= now_days - 30, "过期提醒不应生成：{due}");
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn llc_gets_cit_and_employee_withholding() {
+        let (dir, conn) = ctx();
+        set_company(&conn, "llc", "general", "month", 1);
+        rebuild_filing_tasks(&conn).expect("rebuild");
+        let ts = titles(&conn);
+        assert!(ts.iter().any(|t| t.contains("企业所得税汇算清缴")), "{ts:?}");
+        assert!(!ts.iter().any(|t| t.contains("经营所得个税汇算")), "{ts:?}");
+        assert!(ts.iter().any(|t| t.contains("增值税/附加申报（上月）")), "一般纳税人应有月报 {ts:?}");
+        assert!(ts.iter().any(|t| t.contains("扣缴申报")), "{ts:?}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

@@ -53,6 +53,8 @@ export interface Dashboard {
 export interface CompanyInput {
   name: string;
   tax_no: string;
+  subject_type?: string | null;
+  has_employee?: boolean | null;
   legal_person?: string | null;
   register_city?: string | null;
   tax_city?: string | null;
