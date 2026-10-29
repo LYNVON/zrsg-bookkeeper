@@ -282,6 +282,8 @@ export default function App() {
             <div className="row">
               <label>注册城市</label>
               <input value={coForm.register_city} onChange={(e) => setCoForm({ ...coForm, register_city: e.target.value })} />
+            </div>
+            <div className="row">
               <label>税务城市</label>
               <input value={coForm.tax_city} onChange={(e) => setCoForm({ ...coForm, tax_city: e.target.value })} />
             </div>

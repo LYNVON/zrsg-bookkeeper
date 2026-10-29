@@ -1,10 +1,10 @@
 {
   "version": "0.1.1",
   "notes": "自然拾光记账 0.1.1：数据库加密、经营报表、社保公积金、OFD 解析、单实例锁、静默更新",
-  "pub_date": "2026-10-26T15:52:05Z",
+  "pub_date": "2026-10-29T05:06:20Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQmtGOURhQlY3VzM5WVF5aldnekNsajNIRjdpbUVQbHlmMi9VdldWZVhvQ2phbDVYNi83U0pCNmlDcUlhdDM3V3VVbVZJVXlXV3JWQjc1elovOHlhSnZSS0xDWW0rYXc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMDI5OTIxCWZpbGU66Ieq54S25ou+5YWJ6K6w6LSmXzAuMS4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjEuMQpmY1ZaYUZxRUtGL0JlWGVBRVM3Q1JGNUhDek1SM0xDU2ZiY3R1c0g5TW5SUkFNVnllbjhaYVVPTVVWaU5wbWNEeVZPcnlYS3JMQWFsODhGZm1BNFhDUT09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQmtGOURhQlY3V3gyeHExNjdJakoyKzZVMTlVVEFyeG5FQ0wxOGJNNUgyQXJGUHdXeHdpcWxZNkZQZGVucnE2aFRXazMzRDFhdmNkdjB6K1RocVNPTjEvbDUzR0JZRWdnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMjUwMzY2CWZpbGU66Ieq54S25ou+5YWJ6K6w6LSmXzAuMS4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjEuMQpsUWxScUljYllVREFsall0TmM5b0pnRFBYREFXZExyN3JGOTZtMDA5UXFjNW9QTGZIbmYvQit5dVpwMXYxeWVGTGU1NFErZnk4S3Uwc1RWaUlQUkhEUT09Cg==",
       "url": "https://gitee.com/lynvon/zrsg-bookkeeper/releases/download/v0.1.1/%E8%87%AA%E7%84%B6%E6%8B%BE%E5%85%89%E8%AE%B0%E8%B4%A6_0.1.1_x64-setup.exe"
     }
   }
